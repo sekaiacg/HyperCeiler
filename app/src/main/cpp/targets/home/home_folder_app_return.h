@@ -36,12 +36,16 @@ inline bool folder_app_return_sites(const home_dynamic::Body& body,uint32_t va,
             if(imm9(body[i+4])!=scale_frame||!ldd(body[i+6],29,0)
               ||imm9(body[i+6])!=width_frame)return false;
             // Extended frame store for height: MOVN x17,#imm; STR d2,[fp,x17].
-            if((body[i+7]&0xffe0001fu)!=0x92800011u||body[i+8]!=0xfc316ba2u)return false;
-            const int32_t height_frame=~int32_t((body[i+7]>>5)&65535);
+            if(!movn(body[i+7],17)||body[i+8]!=0xfc316ba2u)return false;
+            const uint64_t height_offset=movn_value(body[i+7]);
+            if(height_offset<UINT64_C(0xfffffffffffff000))return false;
+            const int32_t height_frame=
+                -static_cast<int32_t>(UINT64_MAX-height_offset+1);
             if(!slot(height_frame)||height_frame==width_frame||height_frame==scale_frame)return false;
         }
-        // Height's MOVN x17 and indexed store must both remain inside the
-        // replay: the backend uses x17 to jump back after the four words.
+        // Height uses a feature-owned continuation: replay all four words,
+        // restore x17 from the original MOVN, then branch directly to target+16.
+        // It must not resume through a loader trampoline that reuses x17.
         sites[count]=uint32_t((i+(count?5:4))*4);++count;
     }
     if(count!=2||sites[1]<=sites[0]+16)return false;

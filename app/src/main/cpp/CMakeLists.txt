@@ -4,7 +4,7 @@ project(HyperCeilerNative LANGUAGES CXX)
 # Layout: nativehook/ holds the target-agnostic hook infrastructure; targets/
 # holds the per-feature entry points and resolvers that bind it to one host.
 # The root include dir keeps `nativehook/...` includes valid from any target.
-# The library name is the LSPosed native-hook contract: it must match the
+# The library name is the LSPosed/Vector native-hook contract: it must match the
 # `libHyperCeilerNative.so` entry of META-INF/xposed/native_init.list and the
 # `System.loadLibrary` name in NativeHomeHooksOS4.
 add_library(HyperCeilerNative SHARED

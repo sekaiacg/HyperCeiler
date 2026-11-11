@@ -17,6 +17,10 @@
  *    continuation can jump to address 0. Missing continuations refuse readiness
  *    and trigger checked cleanup. A failing host write can leave physical bytes
  *    live; the pending record is not a guarantee that execution has stopped.
+ *  - A feature may instead provide a direct continuation when its own replayed
+ *    instructions cannot safely use the backend trampoline (for example because
+ *    the loader and a displaced instruction both reserve x17). A direct resume
+ *    remains a first-class readiness and ownership condition.
  *  - A slot whose live words equal the known patch is healthy; live words
  *    equal to the original mean the file-backed page was refilled - safe to
  *    re-arm while generation and continuation still hold; anything else is a
@@ -72,6 +76,10 @@ struct InlineSlot {
     bool write_pending = false;
     bool cleanup_pending = false;
     bool continuation_pending = false;
+    // Feature-owned replay path for sites whose displaced instructions cannot
+    // safely return through the loader's x16/x17 trampoline.
+    bool direct_continuation = false;
+    uintptr_t direct_resume = 0;
     CodePatchJournal<kPatchWords> write_journal{};
     const char* diagnostic_id=nullptr;
     uint32_t diagnostic_code=UINT32_MAX; // Observation only; not a readiness or ownership gate.
@@ -96,7 +104,7 @@ struct InlineHookHost {
     bool (*read_slot)(const InlineSlot<kPatchWords> &, SlotWords<kPatchWords> &) = nullptr;
     /** Write code words back (mprotect + memcpy + clear cache handled inside). */
     bool (*write_words)(uintptr_t, const SlotWords<kPatchWords> &) = nullptr;
-    /** LSPosed-style backend: returns 0 on success, fills `original`. */
+    /** LSPosed/Vector NativeAPI backend: returns 0 on success, fills `original`. */
     int (*hook_install)(void *target, void *replacement, void **original) = nullptr;
     /** Optional backend removal; null means the feature never unhooks. */
     int (*hook_uninstall)(void *target) = nullptr;
@@ -134,6 +142,7 @@ enum class SlotOperation { install, restore, disarm, rearm };
 /** Continuation of a slot is present and non-null. */
 template<size_t kPatchWords>
 inline bool continuation_exists(const InlineSlot<kPatchWords> &slot) {
+    if (slot.direct_continuation) return slot.direct_resume != 0;
     return slot.original != nullptr && *slot.original != nullptr;
 }
 
@@ -230,6 +239,8 @@ inline bool recover_slot_cleanup(InlineSlot<N> &slot, const InlineHookHost<N> &h
     slot.install_pending = false;
     slot.continuation_pending = false;
     slot.cleanup_pending = false;
+    slot.direct_continuation = false;
+    slot.direct_resume = 0;
     return true;
 }
 
@@ -296,7 +307,7 @@ inline bool install_slot(InlineSlot<N> &slot, const InlineHookHost<N> &host) {
     slot.patch_words = after;
     slot.patch_known = true;
     if (!continuation_exists(slot)) {
-        diagnose(slot,host,DiagnosticCode::continuation_invalid,"Backend continuation is null");
+        diagnose(slot,host,DiagnosticCode::continuation_invalid,"Backend/direct continuation is missing");
         slot.cleanup_pending = true;
         const bool restored = recover_slot_cleanup(slot, host);
         if (host.on_guard) host.on_guard({restored

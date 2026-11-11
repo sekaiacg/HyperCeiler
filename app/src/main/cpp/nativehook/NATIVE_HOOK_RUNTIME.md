@@ -34,7 +34,7 @@ NativeHookRuntime = 负责「怎么安全安装、维护、检测失效和恢复
 | `arm64_decode.h` | 通用 ARM64 解码：ADRP、ADD imm、LDR64、BL/B/B.cond、PLT stub、MOVZ/MOVK、UBFX |
 | `resolver.h` | 契约类型与 `evidence_acceptable()` 门 |
 | `hook_bank.h` | inline 槽位状态机：安装 / 恢复补丁词 / re-arm / 健康 / 卸载 |
-| `inline_hook_backend.h` | LSPosed `NativeAPIEntries`（hookFunc/unhookFunc）边界 |
+| `inline_hook_backend.h` | LSPosed/Vector `NativeAPIEntries`（hookFunc/unhookFunc）边界 |
 | `got_hook_backend.h` | caller-specific PLT/GOT hook：唯一性门、RELRO、mprotect 临时加写+恢复、原子替换、全成或全滚回、健康模型 |
 | `page_guard.h` | 可选的页生命周期策略：受保护页注册 + MADV_DONTNEED 分段转发 |
 | `THIRD_PARTY_NOTICES.md` | Apache-2.0 派生说明 |
@@ -138,7 +138,7 @@ R_AARCH64_RELATIVE   = 1027 (0x403)
 然后在 feature 的维护循环里：
 ```cpp
 nhk::InlineHookHost<4> host = make_host();          // 内存访问 + 日志
-nhk::LsposedInlineBackend::instance().attach(host);
+nhk::NativeInlineBackend::instance().attach(host);
 if (!nhk::ensure_slots_live(bank.slots, host, order)) { /* channel stays down */ }
 bool healthy = nhk::slots_healthy(bank.slots, read_all);
 ```

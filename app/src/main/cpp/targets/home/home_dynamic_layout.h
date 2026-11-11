@@ -19,7 +19,11 @@ inline bool std_(uint32_t w,unsigned base,unsigned reg) {return mem(w,0xfc000000
 inline bool ux(uint32_t w,unsigned base,unsigned reg) {return (w&0xffc003ffu)==(0xf9400000u|(base<<5)|reg);}
 inline uint32_t uoff(uint32_t w) {return ((w>>10)&4095)*8;}
 inline bool movz(uint32_t w,unsigned reg) {return (w&0xffe0001fu)==(0xd2800000u|reg);}
+inline bool movn(uint32_t w,unsigned reg) {return (w&0xffe0001fu)==(0x92800000u|reg);}
 inline uint32_t zimm(uint32_t w) {return (w>>5)&65535;}
+inline uint64_t movn_value(uint32_t w) {
+    return ~(static_cast<uint64_t>((w>>5)&65535u)<<(((w>>21)&3u)*16));
+}
 inline bool tag(const Body &b,uint32_t &value) {
     if(b.size()<2 || !movz(b[0],2) || (b[1]&0xffe0001fu)!=0xf2a00002u) return false;
     value=zimm(b[0])|(zimm(b[1])<<16);

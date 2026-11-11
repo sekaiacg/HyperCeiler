@@ -1237,7 +1237,7 @@ hc_layout_container_probe_entry:
  * Dart consumer of the Rust-owned ratio: the shared `getAnimDurationRatio` entry when it binds,
  * else the flight-only `FlightCohort.animDurationRatio` (see bind_animation_consumer). The
  * original Dart function still runs, including its object and state checks; the enabled path
- * replaces only the returned double. A Dart boundary is used because the LSPosed backend on
+ * replaces only the returned double. A Dart boundary is used because the native backend on
  * launcher 7719 refuses the Rust owner's SIMD-save prologue, while it already handles these
  * ordinary Dart prologues for the working geometry hooks above.
  */
@@ -2236,7 +2236,41 @@ icon_render_bank hc_folder_anim_scale3_entry, d0, hc_folder_anim_scale3_original
 icon_render_bank hc_folder_anim_scale4_entry, d0, hc_folder_anim_scale4_original, hc_folder_anim_scale_hits, hc_folder_anim_scale_enabled
 /* App-to-folder stable landing dimensions use the same ordinary-icon factor. */
 icon_render_bank hc_folder_return_width_entry, d0, hc_folder_return_width_original, hc_folder_return_scale_hits, hc_folder_return_scale_enabled
-icon_render_bank hc_folder_return_height_entry, d0, hc_folder_return_height_original, hc_folder_return_scale_hits, hc_folder_return_scale_enabled
+
+/* Height's fourth displaced word reads the stack offset installed by its
+ * third word. Vector NativeAPI trampolines may use x17 to resume,
+ * so this bank replays all four words itself, restores x17 from the decoded
+ * original MOVN immediate, and branches directly to target+16. The backend hook remains
+ * installed for lifecycle/health tracking, but its continuation is not used. */
+.globl hc_folder_return_height_entry
+.p2align 4
+hc_folder_return_height_entry:
+    dart_save
+    adrp x9, hc_folder_return_scale_enabled
+    add x9, x9, :lo12:hc_folder_return_scale_enabled
+    ldar w9, [x9]
+    cbz w9, 1f
+    str q31, [x15, #-16]!
+    adrp x9, hc_icon_scale_bits
+    add x9, x9, :lo12:hc_icon_scale_bits
+    ldar x10, [x9]
+    fmov d31, x10
+    fmul d0, d0, d31
+    ldr q31, [x15], #16
+    adrp x9, hc_folder_return_scale_hits
+    ldr x10, [x9, :lo12:hc_folder_return_scale_hits]
+    add x10, x10, #1
+    str x10, [x9, :lo12:hc_folder_return_scale_hits]
+1:
+    dart_restore
+    fmul d2, d0, d1
+    dynamic_load d0, x29, hc_folder_return_height_load_frame
+    adrp x16, hc_folder_return_height_movn_value
+    ldr x17, [x16, :lo12:hc_folder_return_height_movn_value]
+    str d2, [x29, x17]
+    adrp x16, hc_folder_return_height_resume
+    ldr x16, [x16, :lo12:hc_folder_return_height_resume]
+    br x16
 
 /* Closed large-folder app landing: the original helper mixes a strategy's
  * scaled origin with an unrelated cached square length. The caller-guarded

@@ -265,6 +265,9 @@ uint64_t hc_folder_anim_scale_hits=0;
 uint32_t hc_folder_anim_scale_enabled=0;
 void hc_folder_return_width_entry();void hc_folder_return_height_entry();
 void *hc_folder_return_width_original=nullptr,*hc_folder_return_height_original=nullptr;
+uintptr_t hc_folder_return_height_resume=0;
+int64_t hc_folder_return_height_load_frame=0;
+uint64_t hc_folder_return_height_movn_value=0;
 uint64_t hc_folder_return_scale_hits=0;
 uint32_t hc_folder_return_scale_enabled=0;
 void hc_infinite_0_entry();void hc_infinite_1_entry();
@@ -3611,6 +3614,18 @@ bool bind_folder_app_return_scale() {
             return scale_bind_failure(6,40+i,"app-to-folder scalar replay window cannot be bound");
         prepared[i]={address,entries[i],originals[i],source,words};
     }
+    if(prepared[1].address>UINTPTR_MAX-16)
+        return scale_bind_failure(6,42,"app-to-folder height continuation would overflow");
+    // Height's displaced window ends with MOVN x17; STR [fp,x17]. A loader
+    // trampoline that returns with x17 holding its own code address corrupts
+    // that offset. Replay all four words here and resume after the store.
+    prepared[1].direct_continuation=true;
+    prepared[1].direct_resume=prepared[1].address+16;
+    hc_folder_return_height_load_frame=
+        home_dynamic::imm9(prepared[1].original_words[1]);
+    hc_folder_return_height_movn_value=
+        home_dynamic::movn_value(prepared[1].original_words[2]);
+    hc_folder_return_height_resume=prepared[1].direct_resume;
     for(unsigned i=0;i<2;++i)g_slots[kFolderReturnScaleSlotBase+i]=prepared[i];
     g_scale_bind_failure[6].store(0,std::memory_order_relaxed);
     __android_log_print(ANDROID_LOG_INFO,kTag,"folder app return scale resolved dimensions=2 source=canonical-icon-before-centering");
@@ -5164,7 +5179,7 @@ void publish_indicator_dot_delta() {
     bool progress_ready=true;
     const uint32_t return_ready=nhk::slot_ready(g_slots[kFolderReturnScaleSlotBase])
         &&nhk::slot_ready(g_slots[kFolderReturnScaleSlotBase+1])
-        &&hc_folder_return_width_original&&hc_folder_return_height_original
+        &&hc_folder_return_width_original&&hc_folder_return_height_resume
         &&__atomic_load_n(&hc_icon_render_enabled,__ATOMIC_ACQUIRE);
     const uint32_t return_previous=__atomic_exchange_n(&hc_folder_return_scale_enabled,return_ready,__ATOMIC_ACQ_REL);
     if(return_previous!=return_ready)__android_log_print(return_ready?ANDROID_LOG_INFO:ANDROID_LOG_WARN,kTag,
@@ -6921,6 +6936,8 @@ bool adopt_layout_state() {
     g_widget_scale_reports.store(0,std::memory_order_relaxed);
     hc_folder_return_scale_enabled=0;hc_folder_return_scale_hits=0;
     hc_folder_return_width_original=hc_folder_return_height_original=nullptr;
+    hc_folder_return_height_resume=0;hc_folder_return_height_load_frame=0;
+    hc_folder_return_height_movn_value=0;
     hc_folder_preview_return_enabled=0;hc_folder_preview_return_hits=0;
     g_folder_preview_generation.fetch_add(1,std::memory_order_release);
     std::fill(std::begin(hc_folder_preview_originals),std::end(hc_folder_preview_originals),nullptr);

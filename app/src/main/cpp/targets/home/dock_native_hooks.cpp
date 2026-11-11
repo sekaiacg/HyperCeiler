@@ -872,12 +872,12 @@ nhk::InlineHookHost<kPatchBytes / sizeof(uint32_t)> &slot_host() {
             return nhk::RecoverCodePatch(ops,journal);
         };
         value.hook_install = [](void *target, void *replacement, void **original) {
-            const auto &api = nhk::LsposedInlineBackend::instance().entries();
+            const auto &api = nhk::NativeInlineBackend::instance().entries();
             if (api.hook_func != nullptr) return api.hook_func(target, replacement, original);
             return hook_function != nullptr ? hook_function(target, replacement, original) : -1;
         };
         value.hook_uninstall = [](void *target) {
-            const auto &api = nhk::LsposedInlineBackend::instance().entries();
+            const auto &api = nhk::NativeInlineBackend::instance().entries();
             if (api.unhook_func != nullptr) return api.unhook_func(target);
             return unhook_function != nullptr ? unhook_function(target) : -1;
         };
@@ -2033,7 +2033,7 @@ void start_dock_native_motion(Hook hook, Unhook unhook) {
     unhook_function = unhook;
     // Register with the shared backend boundary so the slot host installs
     // through the same entry points the runtime documents.
-    nhk::LsposedInlineBackend::instance().install_entries({hook, unhook});
+    nhk::NativeInlineBackend::instance().install_entries({hook, unhook});
     pthread_t thread;
     if (pthread_create(&thread, nullptr, motion_worker, nullptr) == 0) pthread_detach(thread);
     else {
